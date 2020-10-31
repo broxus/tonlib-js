@@ -10,7 +10,7 @@ set(${SUBPROJ_NAME}_MINOR_VERSION 0)
 set(${SUBPROJ_NAME}_PATCH_VERSION 0)
 
 set(${SUBPROJ_NAME}_HEADERS
-        "${CMAKE_CURRENT_SOURCE_DIR}/tonlibjs.hpp")
+        "")
 
 set(${SUBPROJ_NAME}_SOURCES
         "${CMAKE_CURRENT_SOURCE_DIR}/tonlibjs.cpp")
@@ -173,7 +173,6 @@ foreach (_ABI IN LISTS _ABIS)
             "BUILDING_NODE_EXTENSION"
             "_LARGEFILE_SOURCE"
             "_FILE_OFFSET_BITS=64"
-            "NAPI_VERSION=3"
             )
 
     target_compile_options(${_TARGET} PRIVATE -std=c++17)

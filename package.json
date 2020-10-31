@@ -3,7 +3,9 @@
   "version": "0.0.1",
   "description": "Node.js bindings to tonlib",
   "main": "index.js",
-  "scripts": {},
+  "scripts": {
+    "install": "cmake-js compile --CDCMAKE_BUILD_TYPE=Release --CDTON_USE_ROCKSDB=OFF --CDTON_USE_ABSEIL=OFF --CDTON_USE_GDB=OFF --CDBUILD_TESTING=OFF"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/broxus/tonlib-js.git"
@@ -20,5 +22,11 @@
   "devDependencies": {
     "nan": "^2.14.2",
     "node-addon-api": "^3.0.2"
+  },
+  "engines": {
+    "node": "~10 >=10.20 || >=12.17"
+  },
+  "cmake-js": {
+    "runtime": "node"
   }
 }
