@@ -3,6 +3,7 @@
 out/
 cmake-*/
 build/
+lib/
 
 CMakeSettings.json
 

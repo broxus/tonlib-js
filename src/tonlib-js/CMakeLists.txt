@@ -202,13 +202,14 @@ foreach (_ABI IN LISTS _ABIS)
     endif ()
 
     # Copy the file to the installation directory.
-    #    string(REPLACE "{node_abi}" "node-v${_ABI}" _OUTPUT_PATH "${_INSTALL_PATH}")
-    #    get_filename_component(_OUTPUT_PATH "${_OUTPUT_PATH}" ABSOLUTE "${CMAKE_CURRENT_SOURCE_PATH}")
-    #    add_custom_command(
-    #            TARGET ${_TARGET}
-    #            POST_BUILD
-    #            COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:${_TARGET}>" "${_OUTPUT_PATH}"
-    #    )
+    if (INSTALL_PATH)
+        get_filename_component(_OUTPUT_PATH "${INSTALL_PATH}" ABSOLUTE BASE_DIR "${PROJECT_SOURCE_DIR}")
+        add_custom_command(
+                TARGET ${_TARGET}
+                POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:${_TARGET}>" "${_OUTPUT_PATH}/${_TARGET}.node"
+        )
+    endif ()
 endforeach ()
 
 # Add a target that builds all Node ABIs.

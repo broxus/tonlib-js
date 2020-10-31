@@ -1,4 +1,4 @@
-const NativeTonlibClient = require('../build/lib/tonlib-js.abi-83').TonlibClient;
+const {TonlibClient} = require('..');
 
 const CONFIG = `{
   "liteservers": [
@@ -25,7 +25,7 @@ const CONFIG = `{
 
 class TestClient {
   constructor() {
-    this.tonlibClient = new NativeTonlibClient();
+    this.tonlibClient = new TonlibClient();
   }
 
   init() {
