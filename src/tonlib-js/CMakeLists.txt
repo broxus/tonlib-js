@@ -82,19 +82,11 @@ endif ()
 # NodeJS specific ############################################### #
 # ############################################################### #
 
-cmake_parse_arguments("" "" "MINIMUM_NODE_ABI;NAN_VERSION;INSTALL_PATH;CACHE_DIR" "EXCLUDE_NODE_ABIS" ${ARGN})
-if (NOT _MINIMUM_NODE_ABI)
-    set(_MINIMUM_NODE_ABI "${NODE_MODULE_MINIMUM_ABI}")
+if (NOT MINIMUM_NODE_ABI)
+    set(MINIMUM_NODE_ABI "${NODE_MODULE_MINIMUM_ABI}")
 endif ()
 if (NOT _CACHE_DIR)
     set(_CACHE_DIR "${NODE_MODULE_CACHE_DIR}")
-endif ()
-if (NOT _INSTALL_PATH)
-    set(_INSTALL_PATH "lib/{node_abi}/${SUBPROJ_NAME}.node")
-endif ()
-get_filename_component(_CACHE_DIR "${_CACHE_DIR}" REALPATH BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
-if (_UNPARSED_ARGUMENTS)
-    message(WARNING "[Node.js] Unused arguments: '${_UNPARSED_ARGUMENTS}'")
 endif ()
 
 # Obtain a list of current Node versions and retrieves the latest version per ABI
@@ -112,7 +104,7 @@ foreach (_LINE IN LISTS _INDEX_FILE)
     string(REGEX MATCHALL "[^\t]*\t" _COLUMNS "${_LINE}")
     list(GET _COLUMNS 8 _ABI)
     string(STRIP "${_ABI}" _ABI)
-    if ((_ABI GREATER _MINIMUM_NODE_ABI OR _ABI EQUAL _MINIMUM_NODE_ABI) AND NOT _ABI IN_LIST _EXCLUDE_NODE_ABIS AND NOT DEFINED _NODE_ABI_${_ABI}_VERSION)
+    if ((_ABI GREATER MINIMUM_NODE_ABI OR _ABI EQUAL MINIMUM_NODE_ABI) AND NOT _ABI IN_LIST _EXCLUDE_NODE_ABIS AND NOT DEFINED _NODE_ABI_${_ABI}_VERSION)
         list(APPEND _ABIS ${_ABI})
         list(GET _COLUMNS 0 _VERSION)
         string(STRIP "${_VERSION}" _NODE_ABI_${_ABI}_VERSION)
@@ -120,14 +112,19 @@ foreach (_LINE IN LISTS _INDEX_FILE)
 endforeach ()
 
 # Install Nan
-if (_NAN_VERSION AND NOT EXISTS "${_CACHE_DIR}/nan/${_NAN_VERSION}/nan.h")
-    _node_module_unpack_tar_gz(
-            "Nan ${_NAN_VERSION}"
-            "https://registry.npmjs.org/nan/-/nan-${_NAN_VERSION}.tgz"
-            "package"
-            "${_CACHE_DIR}/nan/${_NAN_VERSION}"
-    )
-endif ()
+execute_process(COMMAND node -p "require('node-addon-api').include"
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE _NODE_ADDON_API_DIR
+        )
+string(REPLACE "\n" "" _NODE_ADDON_API_DIR ${_NODE_ADDON_API_DIR})
+string(REPLACE "\"" "" _NODE_ADDON_API_DIR ${_NODE_ADDON_API_DIR})
+
+execute_process(COMMAND node -e "require('nan')"
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE _NAN_API_DIR
+        )
+string(REPLACE "\n" "" _NAN_API_DIR ${_NAN_API_DIR})
+string(REPLACE "\"" "" _NAN_API_DIR ${_NAN_API_DIR})
 
 # Generate a target for every ABI
 set(_TARGETS)
@@ -176,18 +173,15 @@ foreach (_ABI IN LISTS _ABIS)
             "BUILDING_NODE_EXTENSION"
             "_LARGEFILE_SOURCE"
             "_FILE_OFFSET_BITS=64"
+            "NAPI_VERSION=3"
             )
 
+    target_compile_options(${_TARGET} PRIVATE -std=c++17)
     target_include_directories(${_TARGET} SYSTEM PRIVATE
             "${_CACHE_DIR}/node/${_NODE_VERSION}"
+            "${PROJECT_ROOT_DIR}/${_NAN_API_DIR}"
+            "${_NODE_ADDON_API_DIR}"
             )
-
-    if (_NAN_VERSION)
-        target_compile_options(${_TARGET} PRIVATE -std=c++11)
-        target_include_directories(${_TARGET} SYSTEM PRIVATE
-                "${_CACHE_DIR}/nan/${_NAN_VERSION}"
-                )
-    endif ()
 
     target_link_libraries(${_TARGET} PRIVATE ${SUBPROJ_NAME})
 

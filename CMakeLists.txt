@@ -7,9 +7,10 @@ set(_PROJECT_MAJOR_VERSION 0)
 set(_PROJECT_MINOR_VERSION 0)
 set(_PROJECT_PATCH_VERSION 11)
 
-set(SUBPROJECT_LIST
-        "src/tonlib-js"
-        )
+set(NODE_MODULE_MINIMUM_API 59)
+set(NAN_VERSION 3.0.2)
+
+set(SUBPROJECT_LIST "src/tonlib-js")
 
 # Cmake module path
 set(PROJECT_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
