@@ -57,7 +57,7 @@ target_include_directories(
 )
 
 target_link_libraries(${SUBPROJ_NAME} INTERFACE
-        tonlib tdactor adnllite tl_lite_api tl-lite-utils ton_crypto ton_block lite-client-common smc-envelope ftabi)
+        tonlib tdactor adnllite tl_lite_api tl-lite-utils ton_crypto ton_block lite-client-common smc-envelope ftabi tl_tonlib_api_json)
 
 # Size optimizations
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
