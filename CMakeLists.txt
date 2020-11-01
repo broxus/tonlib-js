@@ -10,7 +10,9 @@ set(_PROJECT_PATCH_VERSION 11)
 set(MINIMUM_NODE_ABI 72)
 set(NAN_VERSION 3.0.2)
 
-set(SUBPROJECT_LIST "src/tonlib-js")
+set(SUBPROJECT_LIST
+    "src/napi-gen"
+    "src/tonlib-js")
 
 # Cmake module path
 set(PROJECT_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
