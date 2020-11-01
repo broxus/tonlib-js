@@ -10,7 +10,7 @@ set(${SUBPROJ_NAME}_MINOR_VERSION 0)
 set(${SUBPROJ_NAME}_PATCH_VERSION 0)
 
 set(${SUBPROJ_NAME}_HEADERS
-        "")
+        "${CMAKE_CURRENT_SOURCE_DIR}/tl_napi.hpp")
 
 set(${SUBPROJ_NAME}_SOURCES
         "${CMAKE_CURRENT_SOURCE_DIR}/tonlibjs.cpp")
