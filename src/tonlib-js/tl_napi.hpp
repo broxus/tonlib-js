@@ -16,6 +16,32 @@
 
 namespace tjs
 {
+template <class O, class F>
+Napi::Value downcast_call_napi(O&& o, F&& f, Napi::Value res = {})
+{
+    downcast_call(o, [&](const auto& x) { res = f(x); });
+    return res;
+}
+
+template <typename T>
+struct NapiPropsBase : Napi::ObjectWrap<T> {
+    explicit NapiPropsBase(Napi::CallbackInfo& info)
+        : Napi::ObjectWrap<T>{info}
+    {
+        const auto env = info.Env();
+        if (info.Length() < 1 || !info[0].IsObject()) {
+            Napi::TypeError::New(env, "Props object expected").ThrowAsJavaScriptException();
+            return;
+        }
+        props_ = info[0].As<Napi::Object>();
+    }
+
+protected:
+    [[nodiscard]] Napi::Value props(const Napi::CallbackInfo&) { return props_; }
+
+    Napi::Object props_;
+};
+
 struct NapiInt64 {
     int64_t value;
 };
@@ -108,6 +134,16 @@ inline auto to_napi(const Napi::Env& env, bool data) -> Napi::Value
     return Napi::Boolean::New(env, data);
 }
 
+inline auto to_napi(const Napi::Env& env, const std::string& data) -> Napi::Value
+{
+    return Napi::String::New(env, data);
+}
+
+inline auto to_napi(const Napi::Env& env, const td::SecureString& data) -> Napi::Value
+{
+    return Napi::String::New(env, data.as_slice().str());
+}
+
 auto from_napi(const Napi::Value& from, int32_t& to) -> td::Status
 {
     if (!from.IsNumber() && !from.IsString()) {
@@ -191,6 +227,18 @@ auto from_napi_bytes(const Napi::Value& from, std::string& to) -> td::Status
     return td::Status::OK();
 }
 
+auto from_napi_bytes(const Napi::Value& from, td::SecureString& to) -> td::Status
+{
+    if (!from.IsArrayBuffer()) {
+        return td::Status::Error("Expected ArrayBuffer");
+    }
+    auto array_buffer = from.As<Napi::ArrayBuffer>();
+    td::BufferSlice dest(array_buffer.ByteLength());
+    std::memcpy(dest.data(), array_buffer.Data(), array_buffer.ByteLength());
+    to = td::SecureString{std::move(dest)};
+    return td::Status::OK();
+}
+
 template <unsigned size>
 auto from_napi_bytes(const Napi::Value& from, td::BitArray<size>& to) -> td::Status
 {
@@ -235,22 +283,17 @@ auto from_napi_vector_bytes(const Napi::Value& from, std::vector<T>& to) -> td::
 template <typename T>
 class DowncastHelper final : public T {
 public:
-    explicit DowncastHelper(int32_t constructor)
-        : constructor_{constructor}
-    {
-    }
-
     [[nodiscard]] auto get_id() const -> int32_t final { return constructor_; }
     void store(td::TlStorerToString& s, const char* /*field_name*/) const final {}
 
 private:
-    int32_t constructor_;
+    int32_t constructor_{0};
 };
 
 constexpr auto napi_constructor = "constructor";
 
 template <typename T>
-auto from_napi(Napi::Value& from, ton::tl_object_ptr<T>& to) -> td::Status
+auto from_napi(const Napi::Value& from, ton::tl_object_ptr<T>& to) -> td::Status
 {
     if (from.IsNull()) {
         to = nullptr;
@@ -260,10 +303,11 @@ auto from_napi(Napi::Value& from, ton::tl_object_ptr<T>& to) -> td::Status
         return td::Status::Error("Expected object");
     }
     auto object = from.As<Napi::Object>();
+    auto props = object.Get("_props");
 
     if constexpr (std::is_constructible_v<T>) {
         to = ton::create_tl_object<T>();
-        return from_napi(object, *to);
+        return from_napi(from, *to);
     }
     else {
         auto constructor = object.Get(napi_constructor);
@@ -274,6 +318,9 @@ auto from_napi(Napi::Value& from, ton::tl_object_ptr<T>& to) -> td::Status
         if (!constructor_type.IsString()) {
             return td::Status::Error("Invalid constructor name");
         }
+        if (!props.IsObject() || !props.IsNull()) {
+            return td::Status::Error("Expected props object");
+        }
 
         TRY_RESULT(type_id, tl_constructor_from_napi(to.get(), constructor_type.As<Napi::String>().Utf8Value()))
 
@@ -281,7 +328,7 @@ auto from_napi(Napi::Value& from, ton::tl_object_ptr<T>& to) -> td::Status
         td::Status status;
         bool ok = downcast_call(static_cast<T&>(helper), [&](auto& dummy) {
             auto result = ton::create_tl_object<std::decay_t<decltype(dummy)>>();
-            status = from_napi(object, *result);
+            status = from_napi(props, *result);
             to = std::move(result);
         });
         TRY_STATUS(std::move(status))

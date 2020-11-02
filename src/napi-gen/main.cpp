@@ -15,6 +15,30 @@ namespace
 {
 constexpr auto tl_name = "tonlib_api";
 
+auto gen_basic_js_class_name(const std::string& name) -> std::string
+{
+    std::string result;
+    bool next_to_upper = true;
+    for (char i : name) {
+        if (!td::is_alnum(i)) {
+            next_to_upper = true;
+            continue;
+        }
+        if (next_to_upper) {
+            result += td::to_upper(i);
+            next_to_upper = false;
+        }
+        else {
+            result += i;
+        }
+    }
+    return result;
+}
+
+auto gen_js_class_name(const std::string& name) -> std::string
+{
+    return "TonApi" + gen_basic_js_class_name(name);
+}
 
 auto gen_js_field_name(const std::string& name) -> std::string
 {
@@ -36,69 +60,116 @@ auto gen_js_field_name(const std::string& name) -> std::string
     return result;
 }
 
-auto gen_basic_js_class_name(const std::string& name) -> std::string
+}  // namespace
+
+template <typename T>
+void gen_init_napi_class(td::StringBuilder& sb, const T* constructor, bool is_header)
 {
-    std::string result;
-    bool next_to_upper = true;
-    for (char i : name) {
-        if (!td::is_alnum(i)) {
-            next_to_upper = true;
-            continue;
+    if (is_header) {
+        return;
+    }
+
+    const auto js_class_name = gen_js_class_name(constructor->name);
+    const auto has_props = !constructor->args.empty();
+    const auto base_class = PSTRING() << (has_props ? "NapiPropsBase" : "Napi::ObjectWrap") << "<" << js_class_name << ">";
+
+    sb << "class " << js_class_name << " final : public " << base_class << " {\n"
+       << "public:\n"
+       << "  static Napi::FunctionReference* constructor;\n"
+       << "  static void init(const Napi::Env& env, Napi::Object& exports)\n"
+       << "  {\n"
+       << "    auto function = DefineClass(env, \"" << js_class_name << "\", {";
+
+    if (has_props) {
+        sb << "\n      InstanceAccessor(\"_props\", &" << js_class_name << "::props, nullptr)";
+        for (const auto& arg : constructor->args) {
+            sb << ",\n      InstanceAccessor<&" << js_class_name << "::get_" << arg.name << ">(\"" << gen_js_field_name(arg.name) << "\")";
         }
-        if (next_to_upper) {
-            result += td::to_upper(i);
-            next_to_upper = false;
-        }
-        else {
-            result += i;
+        sb << "\n    ";
+    }
+
+    sb << "});\n"
+          "    constructor = new Napi::FunctionReference();\n"
+          "    *constructor = Napi::Persistent(function);\n"
+          "    env.SetInstanceData(constructor);\n";
+    sb << "    exports.Set(\"" << js_class_name << "\", function);\n";
+    sb << "  }\n";
+
+    sb << "  explicit " << js_class_name << "(Napi::CallbackInfo& info)\n";
+    sb << "    : " << base_class
+       << "{info}\n"
+          "  {\n"
+          "  }\n";
+
+    if (has_props) {
+        sb << "private:\n";
+        for (const auto& arg : constructor->args) {
+            sb << "  auto get_" << arg.name << "(const Napi::CallbackInfo&) -> Napi::Value { return props_.Get(\"" << gen_js_field_name(arg.name) << "\"); }\n";
         }
     }
-    return result;
-}
 
-}  // namespace
+    sb << "};\n\n";
+    sb << "Napi::FunctionReference* " << js_class_name << "::constructor = nullptr;\n\n";
+}
 
 template <class T>
 void gen_to_napi_constructor(td::StringBuilder& sb, const T* constructor, bool is_header)
 {
     sb << "auto to_napi(const Napi::Env& env, "
-       << "const " << tl_name << "::" << td::tl::simple::gen_cpp_name(constructor->name) << "& data)"
+       << "const ton::" << tl_name << "::" << td::tl::simple::gen_cpp_name(constructor->name) << "& data)"
        << " -> Napi::Value";
     if (is_header) {
         sb << ";\n";
         return;
     }
-    sb << " {\n";
-    sb << "  auto jo = jv.enter_object();\n";
-    sb << R"(  jo << ctie("@type", ")" << gen_basic_js_class_name(constructor->name) << "\");\n";
+
+    const auto js_class_name = gen_js_class_name(constructor->name);
+
+    sb << "\n{\n";
+
+    if (constructor->args.empty()) {
+        sb << "  return " << js_class_name << "::constructor->New({});\n"
+           << "}\n";
+        return;
+    }
+
+    sb << "  auto props = Napi::Object::New(env);\n";
+
     for (auto& arg : constructor->args) {
-        auto field = td::tl::simple::gen_cpp_field_name(arg.name);
-        // TODO: or as null
-        bool is_custom = arg.type->type == td::tl::simple::Type::Custom;
+        const auto js_field = gen_js_field_name(arg.name);
+        const auto field = td::tl::simple::gen_cpp_field_name(arg.name);
+        const bool is_custom = arg.type->type == td::tl::simple::Type::Custom;
 
         if (is_custom) {
-            sb << "  if (object." << field << ") {\n  ";
+            sb << "  if (data." << field << ") {\n  ";
         }
-        auto object = PSTRING() << "object." << td::tl::simple::gen_cpp_field_name(arg.name);
+
+        auto object = PSTRING() << "data." << td::tl::simple::gen_cpp_field_name(arg.name);
         if (arg.type->type == td::tl::simple::Type::Bytes || arg.type->type == td::tl::simple::Type::SecureBytes) {
-            object = PSTRING() << "JsonBytes{" << object << "}";
+            object = PSTRING() << "NapiBytes{" << object << "}";
         }
         else if (arg.type->type == td::tl::simple::Type::Int64) {
-            object = PSTRING() << "JsonInt64{" << object << "}";
+            object = PSTRING() << "NapiInt64{" << object << "}";
         }
         else if (
             arg.type->type == td::tl::simple::Type::Vector &&
             (arg.type->vector_value_type->type == td::tl::simple::Type::Bytes || arg.type->vector_value_type->type == td::tl::simple::Type::SecureBytes)) {
-            object = PSTRING() << "JsonVectorBytes(" << object << ")";
+            object = PSTRING() << "NapiVectorBytes(" << object << ")";
         }
         else if (arg.type->type == td::tl::simple::Type::Vector && arg.type->vector_value_type->type == td::tl::simple::Type::Int64) {
-            object = PSTRING() << "JsonVectorInt64{" << object << "}";
+            object = PSTRING() << "NapiVectorInt64{" << object << "}";
         }
-        sb << "  jo << ctie(\"" << arg.name << "\", ToJson(" << object << "));\n";
+
+        sb << "  props.Set(\"" << js_field << "\", to_napi(env, " << object << "));\n";
+
         if (is_custom) {
+            sb << "  } else {\n";
+            sb << "    props.Set(\"" << js_field << "\", env.Null());\n";
             sb << "  }\n";
         }
     }
+
+    sb << "  return " << js_class_name << "::constructor->New({props});\n";
     sb << "}\n";
 }
 
@@ -107,38 +178,40 @@ void gen_to_napi(td::StringBuilder& sb, const td::tl::simple::Schema& schema, bo
     for (auto* custom_type : schema.custom_types) {
         if (custom_type->constructors.size() > 1) {
             auto type_name = td::tl::simple::gen_cpp_name(custom_type->name);
-            sb << "auto to_napi(const Napi::Env& env, const " << tl_name << "::" << type_name << "& data) -> Napi::Value";
+            sb << "auto to_napi(const Napi::Env& env, const ton::" << tl_name << "::" << type_name << "& data) -> Napi::Value";
             if (is_header) {
                 sb << ";\n";
             }
             else {
                 sb << "\n{\n"
-                   << "  " << tl_name << "::downcast_call(const_cast<" << tl_name << "::" << type_name
+                   << "  ton::" << tl_name << "::downcast_call(const_cast<ton::" << tl_name << "::" << type_name
                    << "&>(data), [&env](const auto &data) { to_napi(env, data); });\n"
                    << "}\n";
             }
         }
         for (auto* constructor : custom_type->constructors) {
+            gen_init_napi_class(sb, constructor, is_header);
             gen_to_napi_constructor(sb, constructor, is_header);
         }
     }
     for (auto* function : schema.functions) {
+        gen_init_napi_class(sb, function, is_header);
         gen_to_napi_constructor(sb, function, is_header);
     }
 
     if (is_header) {
         sb << "inline auto to_json(const Napi::Env& env, const ton::" << tl_name << "::Object& data) -> Napi::Value\n"
            << "{\n"
-           << "  ton::" << tl_name << "::downcast_call(const_cast<ton::" << tl_name
+           << "  return downcast_call_napi(const_cast<ton::" << tl_name
            << "::Object&>(data), [&env](const auto &data) { "
-              "to_napi(env, data); });\n"
+              "return to_napi(env, data); });\n"
            << "}\n";
 
-        sb << "inline auto to_json(const Napi::Env& env, const ton::" << tl_name << "::Function& object) -> Napi::Value\n"
+        sb << "inline auto to_json(const Napi::Env& env, const ton::" << tl_name << "::Function& data) -> Napi::Value\n"
            << "{\n"
-           << "  ton::" << tl_name << "::downcast_call(const_cast<ton::" << tl_name
+           << "  return downcast_call_napi(const_cast<ton::" << tl_name
            << "::Function&>(data), [&env](const auto &data) { "
-              "to_napi(env, data); });\n"
+              "return to_napi(env, data); });\n"
            << "}\n";
     }
 }
@@ -146,36 +219,41 @@ void gen_to_napi(td::StringBuilder& sb, const td::tl::simple::Schema& schema, bo
 template <class T>
 void gen_from_napi_constructor(td::StringBuilder& sb, const T* constructor, bool is_header)
 {
-    sb << "auto from_napi(const Napi::Value& from, " << tl_name << "::" << td::tl::simple::gen_cpp_name(constructor->name) << " &to) -> td::Status";
+    sb << "auto from_napi(const Napi::Value& from, ton::" << tl_name << "::" << td::tl::simple::gen_cpp_name(constructor->name) << " &to) -> td::Status";
     if (is_header) {
         sb << ";\n";
     }
     else {
-        sb << "\n{\n";
+        sb << "\n{\n"
+              "  if (from.IsNull()) {\n"
+              "    return td::Status::OK();\n"
+              "  }\n"
+              "  if (!from.IsObject()) {\n"
+              "    return td::Status::Error(\"Object expected\");\n"
+              "  }\n"
+              "  auto object = from.As<Napi::Object>();\n";
+
         for (auto& arg : constructor->args) {
-            sb << "  {\n";
-            sb << "    auto value = from.Get(\"" << gen_js_field_name(arg.name) << "\")\n";
-            sb << "    if (!value.IsNull()) {\n";
+            sb << "  if (auto value = object.Get(\"" << gen_js_field_name(arg.name) << "\"); !value.IsNull()) {\n";
             if (arg.type->type == td::tl::simple::Type::Bytes || arg.type->type == td::tl::simple::Type::SecureBytes) {
-                sb << "      TRY_STATUS(from_napi_bytes(value, to." << td::tl::simple::gen_cpp_field_name(arg.name) << "))\n";
+                sb << "    TRY_STATUS(from_napi_bytes(value, to." << td::tl::simple::gen_cpp_field_name(arg.name) << "))\n";
             }
             else if (
                 arg.type->type == td::tl::simple::Type::Vector &&
                 (arg.type->vector_value_type->type == td::tl::simple::Type::Bytes || arg.type->vector_value_type->type == td::tl::simple::Type::SecureBytes)) {
-                sb << "      TRY_STATUS(from_napi_vector_bytes(value, to." << td::tl::simple::gen_cpp_field_name(arg.name) << "));\n";
+                sb << "    TRY_STATUS(from_napi_vector_bytes(value, to." << td::tl::simple::gen_cpp_field_name(arg.name) << "));\n";
             }
             else {
-                sb << "      TRY_STATUS(from_napi(value, to." << td::tl::simple::gen_cpp_field_name(arg.name) << "))\n";
+                sb << "    TRY_STATUS(from_napi(value, to." << td::tl::simple::gen_cpp_field_name(arg.name) << "))\n";
             }
-            sb << "    }\n";
             sb << "  }\n";
         }
-        sb << "  return Status::OK();\n";
+        sb << "  return td::Status::OK();\n";
         sb << "}\n";
     }
 }
 
-void gen_from_json(td::StringBuilder& sb, const td::tl::simple::Schema& schema, bool is_header)
+void gen_from_napi(td::StringBuilder& sb, const td::tl::simple::Schema& schema, bool is_header)
 {
     for (auto* custom_type : schema.custom_types) {
         for (auto* constructor : custom_type->constructors) {
@@ -190,13 +268,13 @@ void gen_from_json(td::StringBuilder& sb, const td::tl::simple::Schema& schema, 
 using Vec = std::vector<std::pair<int32_t, std::string>>;
 void gen_tl_constructor_from_string(td::StringBuilder& sb, td::Slice name, const Vec& vec, bool is_header)
 {
-    sb << "auto tl_constructor_from_string(" << tl_name << "::" << name << "* object, const std::string& str) -> td::Result<int32>";
+    sb << "auto tl_constructor_from_string(ton::" << tl_name << "::" << name << "*, const std::string& str) -> td::Result<int32_t>";
     if (is_header) {
         sb << ";\n";
         return;
     }
     sb << "\n{\n";
-    sb << "  static const std::unordered_map<Slice, int32, SliceHash> m = {\n";
+    sb << "  static const std::unordered_map<td::Slice, int32_t, td::SliceHash> m = {\n";
 
     bool is_first = true;
     for (auto& p : vec) {
@@ -258,38 +336,27 @@ void gen_napi_converter_file(const td::tl::simple::Schema& schema, const std::st
     if (is_header) {
         sb << "#pragma once\n\n";
 
-        sb << "#include \"auto/tl/" << tl_name << ".h\"\n\n";
-        sb << "#include \"auto/tl/" << tl_name << ".hpp\"\n\n";
+        sb << "#include <auto/tl/" << tl_name << ".h>\n";
+        sb << "#include <auto/tl/" << tl_name << ".hpp>\n";
+        sb << "#include <crypto/common/bitstring.h>\n\n";
 
-        sb << "#include \"td/utils/JsonBuilder.h\"\n";
-        sb << "#include \"td/utils/Status.h\"\n\n";
-
-        sb << "#include \"crypto/common/bitstring.h\"\n";
+        sb << "#include \"../tl_napi.hpp\"\n\n";
     }
     else {
         sb << "#include \"" << file_name_base << ".h\"\n\n";
 
-        sb << "#include \"auto/tl/" << tl_name << ".h\"\n";
-        sb << "#include \"auto/tl/" << tl_name << ".hpp\"\n\n";
-
-        sb << "#include \"tl/tl_json.h\"\n\n";
-
-        sb << "#include \"td/utils/base64.h\"\n";
-        sb << "#include \"td/utils/common.h\"\n";
-        sb << "#include \"td/utils/Slice.h\"\n\n";
-
         sb << "#include <unordered_map>\n\n";
     }
-    sb << "namespace ton {\n";
-    sb << "namespace " << tl_name << "{\n";
-    sb << "  using namespace td;\n";
-    gen_tl_constructor_from_string(sb, schema, is_header);
-    gen_from_json(sb, schema, is_header);
-    gen_to_napi(sb, schema, is_header);
-    sb << "}  // namespace " << tl_name << "\n";
-    sb << "}  // namespace ton\n";
 
-    CHECK(!sb.is_error());
+    sb << "namespace tjs {\n";
+
+    gen_tl_constructor_from_string(sb, schema, is_header);
+    gen_from_napi(sb, schema, is_header);
+    gen_to_napi(sb, schema, is_header);
+
+    sb << "}  // namespace tjs\n";
+
+    CHECK(!sb.is_error())
     buf.resize(sb.as_cslice().size());
     auto new_file_content = std::move(buf);
     if (new_file_content != old_file_content.as_slice()) {
@@ -306,8 +373,15 @@ void gen_napi_converter(const td::tl::tl_config& config, const std::string& file
 
 }  // namespace tjs
 
-auto main() -> int
+auto main(int argc, char** argv) -> int
 {
-    tjs::gen_napi_converter(td::tl::read_tl_config_from_file("../../extlibs/ton/tl/generate/scheme/tonlib_api.tlo"), "test");
+    if (argc < 2) {
+        return 1;
+    }
+
+    const auto tlo_path = argv[1];
+    const auto output_path = "tonlib_napi";
+
+    tjs::gen_napi_converter(td::tl::read_tl_config_from_file(tlo_path), output_path);
     return 0;
 }

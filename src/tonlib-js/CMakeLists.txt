@@ -15,6 +15,12 @@ set(${SUBPROJ_NAME}_HEADERS
 set(${SUBPROJ_NAME}_SOURCES
         "${CMAKE_CURRENT_SOURCE_DIR}/tonlibjs.cpp")
 
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/gen)
+set(${SUBPROJ_NAME}_NAPI
+        "${CMAKE_CURRENT_SOURCE_DIR}/gen/tonlib_napi.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/gen/tonlib_napi.cpp")
+set_source_files_properties(${SUBPROJ_NAME}_NAPI PROPERTIES GENERATED TRUE)
+
 # ############################################################### #
 # Options ####################################################### #
 # ############################################################### #
@@ -36,7 +42,9 @@ set(${SUBPROJ_NAME}_VERSION
 set(
         ${SUBPROJ_NAME}_ALL_SRCS
         ${${SUBPROJ_NAME}_HEADERS}
-        ${${SUBPROJ_NAME}_SOURCES})
+        ${${SUBPROJ_NAME}_SOURCES}
+        ${${SUBPROJ_NAME}_NAPI}
+)
 
 # ############################################################### #
 # Create target for build ####################################### #
