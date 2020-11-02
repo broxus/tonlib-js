@@ -188,6 +188,7 @@ Napi::FunctionReference* ClientHandler::constructor = nullptr;
 Napi::Object init(Napi::Env env, Napi::Object exports)
 {
     ClientHandler::init(env, exports);
+    init_napi(env, exports);
     return exports;
 }
 

@@ -322,6 +322,28 @@ void gen_tl_constructor_from_string(td::StringBuilder& sb, const td::tl::simple:
     gen_tl_constructor_from_string(sb, "Function", vec_for_function, is_header);
 }
 
+auto gen_init(td::StringBuilder& sb, const td::tl::simple::Schema& schema, bool is_header)
+{
+    sb << "void init_napi(Napi::Env &env, Napi::Object& exports)";
+    if (is_header) {
+        sb << ";\n";
+        return;
+    }
+
+    sb << "\n{\n";
+
+    for (auto* custom_type : schema.custom_types) {
+        for (auto* constructor : custom_type->constructors) {
+            sb << "  " << gen_js_class_name(constructor->name) << "::init(env, exports);\n";
+        }
+    }
+    for (auto* function : schema.functions) {
+        sb << "  " << gen_js_class_name(function->name) << "::init(env, exports);\n";
+    }
+
+    sb << "\n}\n";
+}
+
 void gen_napi_converter_file(const td::tl::simple::Schema& schema, const std::string& output_path, const std::string& file_name_base, bool is_header)
 {
     auto file_name = is_header ? (file_name_base + ".h") : (file_name_base + ".cpp");
@@ -367,6 +389,7 @@ void gen_napi_converter_file(const td::tl::simple::Schema& schema, const std::st
     gen_tl_constructor_from_string(sb, schema, is_header);
     gen_from_napi(sb, schema, is_header);
     gen_to_napi(sb, schema, is_header);
+    gen_init(sb, schema, is_header);
 
     sb << "}  // namespace tjs\n";
 
