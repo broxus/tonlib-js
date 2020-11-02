@@ -4,6 +4,7 @@ out/
 cmake-*/
 build/
 lib/
+src/tonlib-js/gen/
 
 CMakeSettings.json
 

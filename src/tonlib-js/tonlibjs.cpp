@@ -15,6 +15,9 @@
 #include <tl/tl_json.h>
 #include <tonlib/Client.h>
 
+#include "gen/tonlib_napi.h"
+#include "tl_napi.hpp"
+
 
 namespace tjs
 {
@@ -50,8 +53,10 @@ static std::string from_response(const tonlib_api::Object& object, const td::str
     return str;
 }
 
-struct ClientHandler final : public Napi::ObjectWrap<ClientHandler> {
+struct ClientHandler final : public NapiPropsBase<ClientHandler> {
 public:
+    static Napi::FunctionReference* constructor;
+
     static Napi::Object init(Napi::Env env, Napi::Object exports)
     {
         constexpr auto class_name = "TonlibClient";
@@ -61,11 +66,12 @@ public:
             class_name,
             {
                 InstanceMethod("send", &ClientHandler::send),
+                InstanceAccessor("props", &ClientHandler::props, nullptr),
                 InstanceMethod("receive", &ClientHandler::receive),
                 StaticMethod("execute", &ClientHandler::execute),
             });
 
-        auto* constructor = new Napi::FunctionReference();
+        constructor = new Napi::FunctionReference();
         *constructor = Napi::Persistent(function);
         env.SetInstanceData(constructor);
 
@@ -74,7 +80,7 @@ public:
     }
 
     explicit ClientHandler(Napi::CallbackInfo& info)
-        : Napi::ObjectWrap<ClientHandler>{info}
+        : NapiPropsBase<ClientHandler>{info}
     {
     }
 
@@ -177,9 +183,12 @@ private:
     std::atomic<std::uint64_t> extra_id_{1};
 };
 
+Napi::FunctionReference* ClientHandler::constructor = nullptr;
+
 Napi::Object init(Napi::Env env, Napi::Object exports)
 {
     ClientHandler::init(env, exports);
+    init_napi(env, exports);
     return exports;
 }
 
