@@ -1,8 +1,6 @@
 #pragma once
 
 #include <napi.h>
-#include <td/utils/JsonBuilder.h>
-#include <td/utils/SharedSlice.h>
 #include <td/utils/Slice.h>
 #include <td/utils/Status.h>
 #include <td/utils/base64.h>
@@ -11,18 +9,14 @@
 #include <td/utils/misc.h>
 #include <td/utils/tl_storers.h>
 #include <tl/TlObject.h>
+#include <tl/generate/auto/tl/tonlib_api.h>
 
 #include <type_traits>
 
+#include "gen/tonlib_napi.h"
+
 namespace tjs
 {
-template <class O, class F>
-Napi::Value downcast_call_napi(O&& o, F&& f, Napi::Value res = {})
-{
-    downcast_call(o, [&](const auto& x) { res = f(x); });
-    return res;
-}
-
 template <typename T>
 struct NapiPropsBase : Napi::ObjectWrap<T> {
     explicit NapiPropsBase(Napi::CallbackInfo& info)
@@ -114,16 +108,6 @@ auto to_napi(const Napi::Env& env, const ton::tl_object_ptr<T>& data) -> Napi::V
     }
 }
 
-template <typename T>
-auto to_napi(const Napi::Env& env, const std::vector<T>& data) -> Napi::Value
-{
-    auto array = Napi::Array::New(env, data.size());
-    for (size_t i = 0; i < data.size(); ++i) {
-        array.Set(i, to_napi(data[i]));
-    }
-    return array;
-}
-
 inline auto to_napi(const Napi::Env& env, int32_t data) -> Napi::Value
 {
     return Napi::Number::New(env, data);
@@ -144,100 +128,31 @@ inline auto to_napi(const Napi::Env& env, const td::SecureString& data) -> Napi:
     return Napi::String::New(env, data.as_slice().str());
 }
 
-auto from_napi(const Napi::Value& from, int32_t& to) -> td::Status
+template <typename T>
+auto to_napi(const Napi::Env& env, const std::vector<T>& data) -> Napi::Value
 {
-    if (!from.IsNumber() && !from.IsString()) {
-        return td::Status::Error("Expected number or string");
+    auto array = Napi::Array::New(env, data.size());
+    for (size_t i = 0; i < data.size(); ++i) {
+        array.Set(i, to_napi(env, data[i]));
     }
-    if (from.IsNumber()) {
-        to = from.As<Napi::Number>().Int32Value();
-    }
-    else {
-        auto str = from.As<Napi::String>().Utf8Value();
-        TRY_RESULT_ASSIGN(to, td::to_integer_safe<int32_t>(str))
-    }
-    return td::Status::OK();
+    return array;
 }
 
-auto from_napi(const Napi::Value& from, bool& to) -> td::Status
-{
-    if (!from.IsBoolean()) {
-        int32_t x;
-        auto status = from_napi(from, x);
-        if (status.is_ok()) {
-            to = x != 0;
-            return td::Status::OK();
-        }
-        return td::Status::Error("Expected bool");
-    }
-    to = from.As<Napi::Boolean>();
-    return td::Status::OK();
-}
+auto from_napi(const Napi::Value& from, int32_t& to) -> td::Status;
 
-auto from_napi(const Napi::Value& from, int64_t& to) -> td::Status
-{
-    if (!from.IsNumber() && !from.IsString()) {
-        return td::Status::Error("Expected number or string");
-    }
-    if (from.IsNumber()) {
-        to = from.As<Napi::Number>().Int64Value();
-    }
-    else {
-        auto str = from.As<Napi::String>().Utf8Value();
-        TRY_RESULT_ASSIGN(to, td::to_integer_safe<int64_t>(str))
-    }
-    return td::Status::OK();
-}
+auto from_napi(const Napi::Value& from, bool& to) -> td::Status;
 
-auto from_napi(const Napi::Value& from, double& to) -> td::Status
-{
-    if (!from.IsNumber()) {
-        return td::Status::Error("Expected number");
-    }
-    to = from.As<Napi::Number>().DoubleValue();
-    return td::Status::OK();
-}
+auto from_napi(const Napi::Value& from, int64_t& to) -> td::Status;
 
-auto from_napi(const Napi::Value& from, std::string& to) -> td::Status
-{
-    if (!from.IsString()) {
-        return td::Status::Error("Expected string");
-    }
-    to = from.As<Napi::String>().Utf8Value();
-    return td::Status::OK();
-}
+auto from_napi(const Napi::Value& from, double& to) -> td::Status;
 
-auto from_napi(const Napi::Value& from, td::SecureString& to) -> td::Status
-{
-    if (!from.IsString()) {
-        return td::Status::Error("Expected string");
-    }
-    to = td::SecureString{from.As<Napi::String>().Utf8Value()};
-    return td::Status::OK();
-}
+auto from_napi(const Napi::Value& from, std::string& to) -> td::Status;
 
-auto from_napi_bytes(const Napi::Value& from, std::string& to) -> td::Status
-{
-    if (!from.IsArrayBuffer()) {
-        return td::Status::Error("Expected ArrayBuffer");
-    }
-    auto array_buffer = from.As<Napi::ArrayBuffer>();
-    to.resize(array_buffer.ByteLength());
-    std::memcpy(to.data(), array_buffer.Data(), array_buffer.ByteLength());
-    return td::Status::OK();
-}
+auto from_napi(const Napi::Value& from, td::SecureString& to) -> td::Status;
 
-auto from_napi_bytes(const Napi::Value& from, td::SecureString& to) -> td::Status
-{
-    if (!from.IsArrayBuffer()) {
-        return td::Status::Error("Expected ArrayBuffer");
-    }
-    auto array_buffer = from.As<Napi::ArrayBuffer>();
-    td::BufferSlice dest(array_buffer.ByteLength());
-    std::memcpy(dest.data(), array_buffer.Data(), array_buffer.ByteLength());
-    to = td::SecureString{std::move(dest)};
-    return td::Status::OK();
-}
+auto from_napi_bytes(const Napi::Value& from, std::string& to) -> td::Status;
+
+auto from_napi_bytes(const Napi::Value& from, td::SecureString& to) -> td::Status;
 
 template <unsigned size>
 auto from_napi_bytes(const Napi::Value& from, td::BitArray<size>& to) -> td::Status
@@ -249,20 +164,6 @@ auto from_napi_bytes(const Napi::Value& from, td::BitArray<size>& to) -> td::Sta
         return td::Status::Error("Wrong length for BitArray");
     }
     slice.copy_from(raw);
-    return td::Status::OK();
-}
-
-template <typename T>
-auto from_napi(const Napi::Value& from, std::vector<T>& to) -> td::Status
-{
-    if (!from.IsArray()) {
-        return td::Status::Error("Expected array");
-    }
-    auto array = from.As<Napi::Array>();
-    to = std::vector<T>(array.Length());
-    for (size_t i = 0; i < array.Length(); ++i) {
-        TRY_STATUS(from_napi(array.Get(i), to[i]))
-    }
     return td::Status::OK();
 }
 
@@ -283,6 +184,11 @@ auto from_napi_vector_bytes(const Napi::Value& from, std::vector<T>& to) -> td::
 template <typename T>
 class DowncastHelper final : public T {
 public:
+    explicit DowncastHelper(int32_t constructor)
+        : constructor_{constructor}
+    {
+    }
+
     [[nodiscard]] auto get_id() const -> int32_t final { return constructor_; }
     void store(td::TlStorerToString& s, const char* /*field_name*/) const final {}
 
@@ -293,7 +199,7 @@ private:
 constexpr auto napi_constructor = "constructor";
 
 template <typename T>
-auto from_napi(const Napi::Value& from, ton::tl_object_ptr<T>& to) -> td::Status
+auto from_napi(const Napi::Value& from, std::unique_ptr<T>& to) -> td::Status
 {
     if (from.IsNull()) {
         to = nullptr;
@@ -322,7 +228,7 @@ auto from_napi(const Napi::Value& from, ton::tl_object_ptr<T>& to) -> td::Status
             return td::Status::Error("Expected props object");
         }
 
-        TRY_RESULT(type_id, tl_constructor_from_napi(to.get(), constructor_type.As<Napi::String>().Utf8Value()))
+        TRY_RESULT(type_id, tl_constructor_from_string(to.get(), constructor_type.As<Napi::String>().Utf8Value()))
 
         DowncastHelper<T> helper{type_id};
         td::Status status;
@@ -338,6 +244,20 @@ auto from_napi(const Napi::Value& from, ton::tl_object_ptr<T>& to) -> td::Status
 
         return td::Status::OK();
     }
+}
+
+template <typename T>
+auto from_napi(const Napi::Value& from, std::vector<T>& to) -> td::Status
+{
+    if (!from.IsArray()) {
+        return td::Status::Error("Expected array");
+    }
+    auto array = from.As<Napi::Array>();
+    to = std::vector<T>(array.Length());
+    for (size_t i = 0; i < array.Length(); ++i) {
+        TRY_STATUS(from_napi(array.Get(i), to[i]))
+    }
+    return td::Status::OK();
 }
 
 }  // namespace tjs

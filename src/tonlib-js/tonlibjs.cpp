@@ -15,6 +15,7 @@
 #include <tl/tl_json.h>
 #include <tonlib/Client.h>
 
+#include "gen/tonlib_napi.h"
 #include "tl_napi.hpp"
 
 

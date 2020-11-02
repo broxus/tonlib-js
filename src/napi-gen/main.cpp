@@ -76,7 +76,7 @@ void gen_init_napi_class(td::StringBuilder& sb, const T* constructor, bool is_he
     sb << "class " << js_class_name << " final : public " << base_class << " {\n"
        << "public:\n"
        << "  static Napi::FunctionReference* constructor;\n"
-       << "  static void init(const Napi::Env& env, Napi::Object& exports)\n"
+       << "  static void init(Napi::Env& env, Napi::Object& exports)\n"
        << "  {\n"
        << "    auto function = DefineClass(env, \"" << js_class_name << "\", {";
 
@@ -148,7 +148,7 @@ void gen_to_napi_constructor(td::StringBuilder& sb, const T* constructor, bool i
         if (arg.type->type == td::tl::simple::Type::Bytes || arg.type->type == td::tl::simple::Type::SecureBytes) {
             object = PSTRING() << "NapiBytes{" << object << "}";
         }
-        else if (arg.type->type == td::tl::simple::Type::Int64) {
+        else if (arg.type->type == td::tl::simple::Type::Int53 || arg.type->type == td::tl::simple::Type::Int64) {
             object = PSTRING() << "NapiInt64{" << object << "}";
         }
         else if (
@@ -184,8 +184,10 @@ void gen_to_napi(td::StringBuilder& sb, const td::tl::simple::Schema& schema, bo
             }
             else {
                 sb << "\n{\n"
+                   << "  Napi::Value res{};\n"
                    << "  ton::" << tl_name << "::downcast_call(const_cast<ton::" << tl_name << "::" << type_name
-                   << "&>(data), [&env](const auto &data) { to_napi(env, data); });\n"
+                   << "&>(data), [&res, &env](const auto &data) { res = to_napi(env, data); });\n"
+                   << "  return res;\n"
                    << "}\n";
             }
         }
@@ -200,18 +202,20 @@ void gen_to_napi(td::StringBuilder& sb, const td::tl::simple::Schema& schema, bo
     }
 
     if (is_header) {
-        sb << "inline auto to_json(const Napi::Env& env, const ton::" << tl_name << "::Object& data) -> Napi::Value\n"
+        sb << "inline auto to_napi(const Napi::Env& env, const ton::" << tl_name << "::Object& data) -> Napi::Value\n"
            << "{\n"
-           << "  return downcast_call_napi(const_cast<ton::" << tl_name
-           << "::Object&>(data), [&env](const auto &data) { "
-              "return to_napi(env, data); });\n"
+           << "  Napi::Value res{};\n"
+           << "  ton::" << tl_name << "::downcast_call(const_cast<ton::" << tl_name
+           << "::Object&>(data), [&res, &env](const auto& x) { res = to_napi(env, x); });\n"
+              "  return res;\n"
            << "}\n";
 
-        sb << "inline auto to_json(const Napi::Env& env, const ton::" << tl_name << "::Function& data) -> Napi::Value\n"
+        sb << "inline auto to_napi(const Napi::Env& env, const ton::" << tl_name << "::Function& data) -> Napi::Value\n"
            << "{\n"
-           << "  return downcast_call_napi(const_cast<ton::" << tl_name
-           << "::Function&>(data), [&env](const auto &data) { "
-              "return to_napi(env, data); });\n"
+           << "  Napi::Value res{};\n"
+           << "  ton::" << tl_name << "::downcast_call(const_cast<ton::" << tl_name
+           << "::Function&>(data), [&res, &env](const auto& x) { res = to_napi(env, x); });\n"
+              "  return res;\n"
            << "}\n";
     }
 }
@@ -337,15 +341,25 @@ void gen_napi_converter_file(const td::tl::simple::Schema& schema, const std::st
         sb << "#pragma once\n\n";
 
         sb << "#include <auto/tl/" << tl_name << ".h>\n";
-        sb << "#include <auto/tl/" << tl_name << ".hpp>\n";
-        sb << "#include <crypto/common/bitstring.h>\n\n";
+        sb << "#include <auto/tl/" << tl_name << ".hpp>\n\n";
 
-        sb << "#include \"../tl_napi.hpp\"\n\n";
+        sb << "#include <napi.h>\n"
+              "#include <td/utils/Slice.h>\n"
+              "#include <td/utils/Status.h>\n"
+              "#include <td/utils/base64.h>\n"
+              "#include <td/utils/buffer.h>\n"
+              "#include <td/utils/format.h>\n"
+              "#include <td/utils/misc.h>\n"
+              "#include <td/utils/tl_storers.h>\n"
+              "#include <tl/TlObject.h>\n"
+              "#include <crypto/common/bitstring.h>\n\n";
     }
     else {
         sb << "#include \"" << file_name_base << ".h\"\n\n";
 
         sb << "#include <unordered_map>\n\n";
+
+        sb << "#include \"../tl_napi.hpp\"\n\n";
     }
 
     sb << "namespace tjs {\n";
