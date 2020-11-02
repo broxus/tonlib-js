@@ -27,13 +27,13 @@ struct NapiPropsBase : Napi::ObjectWrap<T> {
             Napi::TypeError::New(env, "Props object expected").ThrowAsJavaScriptException();
             return;
         }
-        props_ = info[0].As<Napi::Object>();
+        props_ = Napi::Persistent(info[0].As<Napi::Object>());
     }
 
 protected:
-    [[nodiscard]] Napi::Value props(const Napi::CallbackInfo&) { return props_; }
+    [[nodiscard]] Napi::Value props(const Napi::CallbackInfo&) { return props_.Value(); }
 
-    Napi::Object props_;
+    Napi::ObjectReference props_;
 };
 
 struct NapiInt64 {
@@ -211,9 +211,13 @@ auto from_napi(const Napi::Value& from, std::unique_ptr<T>& to) -> td::Status
     auto object = from.As<Napi::Object>();
     auto props = object.Get("_props");
 
+    if (!props.IsObject() || !props.IsNull()) {
+        return td::Status::Error("Expected props object");
+    }
+
     if constexpr (std::is_constructible_v<T>) {
         to = ton::create_tl_object<T>();
-        return from_napi(from, *to);
+        return from_napi(props, *to);
     }
     else {
         auto constructor = object.Get(napi_constructor);
@@ -223,9 +227,6 @@ auto from_napi(const Napi::Value& from, std::unique_ptr<T>& to) -> td::Status
         auto constructor_type = constructor.As<Napi::Function>().Get("name");
         if (!constructor_type.IsString()) {
             return td::Status::Error("Invalid constructor name");
-        }
-        if (!props.IsObject() || !props.IsNull()) {
-            return td::Status::Error("Expected props object");
         }
 
         TRY_RESULT(type_id, tl_constructor_from_string(to.get(), constructor_type.As<Napi::String>().Utf8Value()))
