@@ -37,7 +37,7 @@ auto gen_basic_js_class_name(const std::string& name) -> std::string
 
 auto gen_js_class_name(const std::string& name) -> std::string
 {
-    return "TonApi" + gen_basic_js_class_name(name);
+    return /*"TonApi" + */ gen_basic_js_class_name(name);
 }
 
 auto gen_js_field_name(const std::string& name) -> std::string
@@ -58,6 +58,41 @@ auto gen_js_field_name(const std::string& name) -> std::string
         }
     }
     return result;
+}
+
+auto tl_type_to_js(const td::tl::simple::Type* arg_type) -> std::string
+{
+    switch (arg_type->type) {
+        case td::tl::simple::Type::Int32:
+        case td::tl::simple::Type::Int53:
+        case td::tl::simple::Type::Int64:
+            return "number | string";
+        case td::tl::simple::Type::Double:
+            return "number";
+        case td::tl::simple::Type::String:
+        case td::tl::simple::Type::SecureString:
+            return "string";
+        case td::tl::simple::Type::Bytes:
+        case td::tl::simple::Type::SecureBytes:
+        case td::tl::simple::Type::Int128:
+        case td::tl::simple::Type::Int256:
+            return "ArrayBuffer";
+        case td::tl::simple::Type::Bool:
+            return "boolean";
+        case td::tl::simple::Type::True:
+            return "true";
+        case td::tl::simple::Type::Custom: {
+            return "null | " + gen_js_class_name(arg_type->custom->name);
+        }
+        case td::tl::simple::Type::Vector:
+            return tl_type_to_js(arg_type->vector_value_type) + "[]";
+        case td::tl::simple::Type::Object:
+            return gen_js_class_name("Object");
+        case td::tl::simple::Type::Function:
+            return gen_js_class_name("Function");
+        default:
+            return {};
+    }
 }
 
 }  // namespace
@@ -401,26 +436,121 @@ void gen_napi_converter_file(const td::tl::simple::Schema& schema, const std::st
     }
 }
 
-void gen_napi_converter(const td::tl::tl_config& config, const std::string& output_path, const std::string& file_name)
+template <typename T>
+void gen_js_type_definition(td::StringBuilder& sb, const T* constructor)
 {
-    td::tl::simple::Schema schema(config);
-    gen_napi_converter_file(schema, output_path, file_name, true);
-    gen_napi_converter_file(schema, output_path, file_name, false);
+    const auto js_class_name = gen_js_class_name(constructor->name);
+
+    const auto props_type = js_class_name + "Props";
+    const auto has_props = !constructor->args.empty();
+
+    if (has_props) {
+        sb << "export type " << props_type << " = {\n";
+        for (const auto& arg : constructor->args) {
+            sb << "  " << gen_js_field_name(arg.name) << ": " << tl_type_to_js(arg.type) << ",\n";
+        }
+        sb << "}\n";
+    }
+
+    sb << "export class " << js_class_name << " {\n";
+
+    if (constructor->args.empty()) {
+        sb << "  constructor();\n"
+              "}\n";
+        return;
+    }
+
+    sb << "  constructor(props: " << props_type << ");\n";
+    sb << "  get _props(): " << props_type << "\n";
+    for (const auto& arg : constructor->args) {
+        sb << "  get " << gen_js_field_name(arg.name) << "(): " << tl_type_to_js(arg.type) << ";\n";
+    }
+    sb << "}\n";
+}
+
+void gen_js_type_definitions(td::StringBuilder& sb, const td::tl::simple::Schema& schema)
+{
+    //
+    for (const auto* item : schema.custom_types) {
+        const auto& constructors = item->constructors;
+
+        for (const auto* constructor : constructors) {
+            gen_js_type_definition(sb, constructor);
+        }
+
+        if (!constructors.empty() && (constructors.size() > 1 || gen_js_class_name(constructors[0]->name) != gen_js_class_name(constructors[0]->type->name))) {
+            sb << "export type " << gen_js_class_name(item->name) << " = ";
+            for (const auto* constructor : constructors) {
+                sb << "\n  | " << gen_js_class_name(constructor->name);
+            }
+            sb << ";\n";
+        }
+    }
+
+    sb << "export type " << gen_js_class_name("Object") << " = ";
+    for (const auto* item : schema.custom_types) {
+        if (item->constructors.empty()) {
+            continue;
+        }
+        sb << "\n  | " << gen_js_class_name(item->name);
+    }
+    sb << ";\n";
+
+    //
+    for (const auto* item : schema.functions) {
+        gen_js_type_definition(sb, item);
+    }
+
+    sb << "export type " << gen_js_class_name("Function") << " = ";
+    for (const auto* item : schema.functions) {
+        sb << "\n  | " << gen_js_class_name(item->name);
+    }
+    sb << ";\n";
+}
+
+void gen_js_type_definitions_file(const td::tl::simple::Schema& schema, const std::string& output_path)
+{
+    auto file_name = "index.d.ts";
+
+    std::string buf(2000000, ' ');
+    td::StringBuilder sb(td::MutableSlice{buf});
+
+    gen_js_type_definitions(sb, schema);
+
+    sb << "\n"
+          "export class TonlibClient {\n"
+          "    constructor();\n"
+          "    get test(): string;\n";
+    sb << "    send(request: " << gen_js_class_name("Object") << "): void;\n";
+    sb << "    receive(timeout: number): object;\n";
+    sb << "    execute(request: " << gen_js_class_name("Object") << "): object;\n";
+    sb << "}\n\n";
+
+    CHECK(!sb.is_error())
+    buf.resize(sb.as_cslice().size());
+    auto new_file_content = std::move(buf);
+    td::write_file(output_path + "/" + file_name, new_file_content).ensure();
 }
 
 }  // namespace tjs
 
 auto main(int argc, char** argv) -> int
 {
-    if (argc < 3) {
+    if (argc < 4) {
         return 1;
     }
 
     const auto tlo_path = argv[1];
-    const auto output_path = argv[2];
+    const auto napi_output_path = argv[2];
+    const auto ts_output_path = argv[3];
 
-    const auto file_name = "tonlib_napi";
+    td::tl::simple::Schema schema(td::tl::read_tl_config_from_file(tlo_path));
 
-    tjs::gen_napi_converter(td::tl::read_tl_config_from_file(tlo_path), output_path, file_name);
+    const auto cpp_file_name = "tonlib_napi";
+    tjs::gen_napi_converter_file(schema, napi_output_path, cpp_file_name, true);
+    tjs::gen_napi_converter_file(schema, napi_output_path, cpp_file_name, false);
+
+    tjs::gen_js_type_definitions_file(schema, ts_output_path);
+
     return 0;
 }

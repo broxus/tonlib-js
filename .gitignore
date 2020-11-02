@@ -1,3 +1,5 @@
+# Custom files
+
 .vs/
 .idea/
 out/
@@ -5,7 +7,9 @@ cmake-*/
 build/
 lib/
 src/tonlib-js/gen/
+/index.d.ts
 
+# Cmake
 CMakeSettings.json
 
 # Prerequisites

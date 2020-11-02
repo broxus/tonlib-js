@@ -16,8 +16,6 @@
 #include <tonlib/Client.h>
 
 #include "gen/tonlib_napi.h"
-#include "tl_napi.hpp"
-
 
 namespace tjs
 {
@@ -53,7 +51,7 @@ static std::string from_response(const tonlib_api::Object& object, const td::str
     return str;
 }
 
-struct ClientHandler final : public NapiPropsBase<ClientHandler> {
+struct ClientHandler final : public Napi::ObjectWrap<ClientHandler> {
 public:
     static Napi::FunctionReference* constructor;
 
@@ -66,7 +64,6 @@ public:
             class_name,
             {
                 InstanceMethod("send", &ClientHandler::send),
-                InstanceAccessor("props", &ClientHandler::props, nullptr),
                 InstanceMethod("receive", &ClientHandler::receive),
                 StaticMethod("execute", &ClientHandler::execute),
             });
@@ -80,7 +77,7 @@ public:
     }
 
     explicit ClientHandler(Napi::CallbackInfo& info)
-        : NapiPropsBase<ClientHandler>{info}
+        : Napi::ObjectWrap<ClientHandler>{info}
     {
     }
 
