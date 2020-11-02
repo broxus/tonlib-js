@@ -20,7 +20,13 @@ file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/gen)
 set(${SUBPROJ_NAME}_NAPI
         "${CMAKE_CURRENT_SOURCE_DIR}/gen/tonlib_napi.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/gen/tonlib_napi.cpp")
-set_source_files_properties(${SUBPROJ_NAME}_NAPI PROPERTIES GENERATED TRUE)
+set_source_files_properties(${${SUBPROJ_NAME}_NAPI} PROPERTIES GENERATED TRUE)
+
+add_custom_target(generate_napi
+        COMMAND ${PROJECT_BINARY_DIR}/bin/napi-gen
+        ${PROJECT_ROOT_DIR}/extlibs/ton/tl/generate/scheme/tonlib_api.tlo
+        ${CMAKE_CURRENT_SOURCE_DIR}/gen)
+add_dependencies(generate_napi napi-gen)
 
 # ############################################################### #
 # Options ####################################################### #
@@ -55,6 +61,7 @@ include(NodeHelpers)
 
 # Library target
 add_library(${SUBPROJ_NAME} INTERFACE)
+add_dependencies(${SUBPROJ_NAME} generate_napi)
 
 target_sources(${SUBPROJ_NAME} INTERFACE ${${SUBPROJ_NAME}_ALL_SRCS})
 

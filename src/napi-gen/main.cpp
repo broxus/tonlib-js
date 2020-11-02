@@ -322,12 +322,12 @@ void gen_tl_constructor_from_string(td::StringBuilder& sb, const td::tl::simple:
     gen_tl_constructor_from_string(sb, "Function", vec_for_function, is_header);
 }
 
-void gen_napi_converter_file(const td::tl::simple::Schema& schema, const std::string& file_name_base, bool is_header)
+void gen_napi_converter_file(const td::tl::simple::Schema& schema, const std::string& output_path, const std::string& file_name_base, bool is_header)
 {
-    auto file_name = is_header ? file_name_base + ".h" : file_name_base + ".cpp";
+    auto file_name = is_header ? (file_name_base + ".h") : (file_name_base + ".cpp");
     // file_name = "auto/" + file_name;
     auto old_file_content = [&] {
-        auto r_content = td::read_file(file_name);
+        auto r_content = td::read_file(output_path + "/" + file_name);
         if (r_content.is_error()) {
             return td::BufferSlice();
         }
@@ -374,28 +374,30 @@ void gen_napi_converter_file(const td::tl::simple::Schema& schema, const std::st
     buf.resize(sb.as_cslice().size());
     auto new_file_content = std::move(buf);
     if (new_file_content != old_file_content.as_slice()) {
-        td::write_file(file_name, new_file_content).ensure();
+        td::write_file(output_path + "/" + file_name, new_file_content).ensure();
     }
 }
 
-void gen_napi_converter(const td::tl::tl_config& config, const std::string& file_name)
+void gen_napi_converter(const td::tl::tl_config& config, const std::string& output_path, const std::string& file_name)
 {
     td::tl::simple::Schema schema(config);
-    gen_napi_converter_file(schema, file_name, true);
-    gen_napi_converter_file(schema, file_name, false);
+    gen_napi_converter_file(schema, output_path, file_name, true);
+    gen_napi_converter_file(schema, output_path, file_name, false);
 }
 
 }  // namespace tjs
 
 auto main(int argc, char** argv) -> int
 {
-    if (argc < 2) {
+    if (argc < 3) {
         return 1;
     }
 
     const auto tlo_path = argv[1];
-    const auto output_path = "tonlib_napi";
+    const auto output_path = argv[2];
 
-    tjs::gen_napi_converter(td::tl::read_tl_config_from_file(tlo_path), output_path);
+    const auto file_name = "tonlib_napi";
+
+    tjs::gen_napi_converter(td::tl::read_tl_config_from_file(tlo_path), output_path, file_name);
     return 0;
 }

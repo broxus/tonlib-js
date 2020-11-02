@@ -47,7 +47,7 @@ set_target_properties(
         RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin"
         ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib"
         LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib"
-        OUTPUT_NAME "${SUBPROJ_NAME}$<$<CONFIG:Debug>:d>")
+        OUTPUT_NAME "${SUBPROJ_NAME}")
 
 target_include_directories(
         ${SUBPROJ_NAME}
