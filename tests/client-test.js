@@ -1,5 +1,4 @@
-//const tl = require('..');
-const tl = require('../cmake-build-debug/lib/tonlib-js.abi-83');
+const tl = require('..');
 
 const CONFIG = `{
   "liteservers": [

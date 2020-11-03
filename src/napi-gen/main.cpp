@@ -506,6 +506,17 @@ void gen_js_type_definitions(td::StringBuilder& sb, const td::tl::simple::Schema
         sb << "\n  | " << gen_js_class_name(item->name);
     }
     sb << ";\n";
+
+    //
+    sb << "\n"
+          "export class TonlibClient {\n"
+          "    constructor();\n";
+    for (const auto* item : schema.functions) {
+        const auto type = tl_type_to_js(item->type);
+        sb << "    send(request: " << gen_js_class_name(item->name) << "): Promise<" << type << ">;\n";
+    }
+    sb << "    execute(request: " << gen_js_class_name("Object") << "): object;\n";
+    sb << "}\n\n";
 }
 
 void gen_js_type_definitions_file(const td::tl::simple::Schema& schema, const std::string& output_path)
@@ -516,14 +527,6 @@ void gen_js_type_definitions_file(const td::tl::simple::Schema& schema, const st
     td::StringBuilder sb(td::MutableSlice{buf});
 
     gen_js_type_definitions(sb, schema);
-
-    sb << "\n"
-          "export class TonlibClient {\n"
-          "    constructor();\n"
-          "    get test(): string;\n";
-    sb << "    send(request: " << gen_js_class_name("Object") << "): Promise<object>;\n";
-    sb << "    execute(request: " << gen_js_class_name("Object") << "): object;\n";
-    sb << "}\n\n";
 
     CHECK(!sb.is_error())
     buf.resize(sb.as_cslice().size());
