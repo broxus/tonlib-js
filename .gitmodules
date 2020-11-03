@@ -1,3 +1,0 @@
-[submodule "extlibs/ton"]
-	path = extlibs/ton
-	url = https://github.com/broxus/ton

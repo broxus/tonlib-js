@@ -1,6 +1,6 @@
 {
   "name": "tonlib",
-  "version": "0.0.2",
+  "version": "0.0.4",
   "description": "Node.js bindings to tonlib",
   "main": "index.js",
   "scripts": {
@@ -16,11 +16,11 @@
     "url": "https://github.com/broxus/tonlib-js/issues"
   },
   "homepage": "https://github.com/broxus/tonlib-js#readme",
-  "dependencies": {},
-  "devDependencies": {
+  "dependencies": {
     "cmake-js": "^6.1.0",
     "nan": "^2.14.2",
-    "node-addon-api": "^3.0.2"
+    "node-addon-api": "^3.0.2",
+    "ton-cpp-src": "^1.0.1"
   },
   "engines": {
     "node": "~10 >=10.20 || >=12.17"
