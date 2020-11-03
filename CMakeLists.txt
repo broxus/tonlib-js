@@ -34,7 +34,7 @@ string(REPLACE "\n" "" TON_SRC_DIR ${TON_SRC_DIR})
 string(REPLACE "\"" "" TON_SRC_DIR ${TON_SRC_DIR})
 get_filename_component(TON_SRC_DIR "${TON_SRC_DIR}/ton" ABSOLUTE BASE_DIR ${PROJECT_ROOT_DIR})
 
-add_subdirectory(${TON_SRC_DIR} EXCLUDE_FROM_ALL)
+add_subdirectory(${TON_SRC_DIR} ${PROJECT_BINARY_DIR}/node_modules/ton EXCLUDE_FROM_ALL)
 
 # Targets
 foreach (SUBPROJ ${SUBPROJECT_LIST})

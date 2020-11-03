@@ -84,19 +84,6 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_link_libraries(${SUBPROJ_NAME} INTERFACE -Wl,--gc-sections)
 endif ()
 
-# Enable IPO
-cmake_policy(SET CMP0069 NEW)
-set(CMAKE_POLICY_DEFAULT_CMP0069 NEW)
-
-include(CheckIPOSupported)
-check_ipo_supported(RESULT result)
-if (result)
-    message("INTERPROCEDURAL_OPTIMIZATION enabled")
-    set_target_properties(${SUBPROJ_NAME} PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
-else ()
-    message("INTERPROCEDURAL_OPTIMIZATION disabled")
-endif ()
-
 # ############################################################### #
 # NodeJS specific ############################################### #
 # ############################################################### #
