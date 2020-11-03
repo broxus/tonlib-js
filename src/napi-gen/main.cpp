@@ -521,8 +521,7 @@ void gen_js_type_definitions_file(const td::tl::simple::Schema& schema, const st
           "export class TonlibClient {\n"
           "    constructor();\n"
           "    get test(): string;\n";
-    sb << "    send(request: " << gen_js_class_name("Object") << "): void;\n";
-    sb << "    receive(timeout: number): object;\n";
+    sb << "    send(request: " << gen_js_class_name("Object") << "): Promise<object>;\n";
     sb << "    execute(request: " << gen_js_class_name("Object") << "): object;\n";
     sb << "}\n\n";
 

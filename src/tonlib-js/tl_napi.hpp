@@ -201,7 +201,7 @@ constexpr auto napi_constructor = "constructor";
 template <typename T>
 auto from_napi(const Napi::Value& from, std::unique_ptr<T>& to) -> td::Status
 {
-    if (from.IsNull()) {
+    if (from.IsNull() || from.IsUndefined()) {
         to = nullptr;
         return td::Status::OK();
     }
@@ -210,8 +210,11 @@ auto from_napi(const Napi::Value& from, std::unique_ptr<T>& to) -> td::Status
     }
     auto object = from.As<Napi::Object>();
     auto props = object.Get("_props");
+    if (props.IsUndefined()) {
+        props = from.Env().Null();
+    }
 
-    if (!props.IsObject() || !props.IsNull()) {
+    if (!props.IsObject() && !props.IsNull()) {
         return td::Status::Error("Expected props object");
     }
 

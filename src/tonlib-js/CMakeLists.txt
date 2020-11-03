@@ -10,9 +10,11 @@ set(${SUBPROJ_NAME}_MINOR_VERSION 0)
 set(${SUBPROJ_NAME}_PATCH_VERSION 0)
 
 set(${SUBPROJ_NAME}_HEADERS
+        "${CMAKE_CURRENT_SOURCE_DIR}/client.hpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tl_napi.hpp")
 
 set(${SUBPROJ_NAME}_SOURCES
+        "${CMAKE_CURRENT_SOURCE_DIR}/client.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tl_napi.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tonlibjs.cpp")
 
@@ -74,7 +76,7 @@ target_include_directories(
 )
 
 target_link_libraries(${SUBPROJ_NAME} INTERFACE
-        tonlib tdactor adnllite tl_lite_api tl-lite-utils ton_crypto ton_block lite-client-common smc-envelope ftabi tl_tonlib_api_json)
+        tonlib tdactor adnllite tl_lite_api tl-lite-utils ton_crypto ton_block lite-client-common smc-envelope ftabi)
 
 # Size optimizations
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")

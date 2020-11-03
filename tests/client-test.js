@@ -1,4 +1,5 @@
-const {TonlibClient} = require('..');
+//const tl = require('..');
+const tl = require('../cmake-build-debug/lib/tonlib-js.abi-83');
 
 const CONFIG = `{
   "liteservers": [
@@ -25,39 +26,39 @@ const CONFIG = `{
 
 class TestClient {
   constructor() {
-    this.tonlibClient = new TonlibClient();
+    this.tonlibClient = new tl.TonlibClient();
   }
 
   init() {
-    this.tonlibClient.send({
-      '@type': 'init',
-      options: {
-        config: {
+    return this.tonlibClient.send(new tl.Init({
+      options: new tl.Options({
+        config: new tl.Config({
           config: CONFIG,
-          blockchain_name: 'mainnet'
-        },
-        keystore_type: {
-          '@type': 'keyStoreTypeInMemory'
-        }
-      }
-    })
+          blockchainName: 'mainnet',
+          useCallbacksForNetwork: false,
+          ignoreCache: true
+        }),
+        keystoreType: new tl.KeyStoreTypeInMemory()
+      })
+    }));
   }
 
   getMasterchainInfo() {
-    this.tonlibClient.send({
-      '@type': 'liteServer.getMasterchainInfo'
-    })
-  }
-
-  poll(timeout) {
-    console.log(this.tonlibClient.receive(timeout));
+    return this.tonlibClient.send(new tl.LiteServerGetMasterchainInfo());
   }
 }
 
-const client = new TestClient();
-client.init();
-client.getMasterchainInfo();
+(async () => {
+  const client = new TestClient();
 
-while (true) {
-  console.log(client.poll(300));
-}
+  try {
+    await client.init();
+
+    const state = await client.getMasterchainInfo();
+    console.log(state);
+  } catch (e) {
+    console.error(e);
+  }
+})();
+
+process.stdin.resume();
