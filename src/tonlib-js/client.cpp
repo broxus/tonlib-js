@@ -21,9 +21,8 @@ public:
             Callback& operator=(Callback&&) = delete;
         };
 
-        scheduler_.run_in_context([&] {
-            tonlib_ = td::actor::create_actor<tonlib::TonlibClient>(td::actor::ActorOptions().with_name("Tonlib").with_poll(), td::make_unique<Callback>());
-        });
+        scheduler_.run_in_context(
+            [&] { tonlib_ = td::actor::create_actor<tonlib::TonlibClient>(td::actor::ActorOptions().with_name("Tonlib"), td::make_unique<Callback>()); });
         scheduler_thread_ = td::thread([&] { scheduler_.run(); });
     }
 

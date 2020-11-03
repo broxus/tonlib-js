@@ -12,6 +12,8 @@
 #include <td/utils/logging.h>
 #include <td/utils/port/thread_local.h>
 
+#include <future>
+
 #include "client.hpp"
 #include "gen/tonlib_napi.h"
 #include "tl_napi.hpp"
@@ -93,24 +95,45 @@ private:
             return env.Null();
         }
 
-        auto deferred = Napi::Promise::Deferred::New(env);
-        Napi::AsyncContext context(env, "tonlib_async_context");
-
-        auto promise = deferred.Promise();
-
-        auto P = td::PromiseCreator::lambda([deferred, context = std::move(context)](td::Result<Client::Response> R) {
-            if (R.is_error()) {
-                const auto error = Napi::String::New(context.Env(), R.move_as_error().message().str());
-                deferred.Reject(error);
+        struct RequestWorker final : Napi::AsyncWorker {
+            explicit RequestWorker(Napi::Env& env, std::future<td::Result<Client::Response>>&& fut)
+                : Napi::AsyncWorker{env}
+                , response_fut{std::move(fut)}
+                , deferred{Napi::Promise::Deferred::New(env)}
+            {
             }
-            else {
-                const auto result = to_napi(context.Env(), R.move_as_ok());
-                deferred.Resolve(result);
+
+            void Execute() final
+            {
+                auto result_r = response_fut.get();
+                if (result_r.is_error()) {
+                    SetError(result_r.move_as_error().to_string());
+                }
+                else {
+                    response = result_r.move_as_ok();
+                }
             }
-        });
+
+            void OnOK() final { deferred.Resolve(to_napi(Env(), response)); }
+
+            void OnError(const Napi::Error& error) final { deferred.Reject(error.Value()); }
+
+            std::future<td::Result<Client::Response>> response_fut;
+            Client::Response response;
+            Napi::Promise::Deferred deferred;
+        };
+
+        std::promise<td::Result<Client::Response>> client_promise;
+        auto* worker = new RequestWorker(env, client_promise.get_future());
+        auto js_promise = worker->deferred.Promise();
+
+        auto P = td::PromiseCreator::lambda(
+            [client_promise = std::move(client_promise)](td::Result<Client::Response> R) mutable { client_promise.set_value(std::move(R)); });
         client_.send(r_request.move_as_ok(), std::move(P));
 
-        return promise;
+        worker->Queue();
+
+        return js_promise;
     }
 
     Client client_;

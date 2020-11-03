@@ -48,17 +48,15 @@ class TestClient {
   }
 }
 
-(async () => {
-  const client = new TestClient();
+const client = new TestClient();
 
+(async () => {
   try {
     await client.init();
 
     const state = await client.getMasterchainInfo();
-    console.log(state);
+    console.log(state.last._props);
   } catch (e) {
     console.error(e);
   }
 })();
-
-process.stdin.resume();
