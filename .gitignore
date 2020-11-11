@@ -8,6 +8,7 @@ build/
 lib/
 src/tonlib-js/gen/
 /index.d.ts
+ton
 
 # Cmake
 CMakeSettings.json
